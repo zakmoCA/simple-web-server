@@ -17,29 +17,67 @@ int setupServer()
   int serverSocket;
   struct sockaddr_in serverAddress;
 
+  // initialise socket
+  serverSocket = socket(AF_INET, SOCK_STREAM, 0); // Type IPv4 socket using TCP protocol
+  if (serverSocket < 0)
+  {
+    perror("Error creating socket");
+    return -1; 
+  }
+  
+  // enable reuse of port and address
+  setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+
+  // configure server address to bind socket
   serverAddress.sin_family = AF_INET;                     // IPv4
   serverAddress.sin_port = htons(PORT);                   // port number in network byte order (host-to-network short)
   serverAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK); // localhost (host to network long)
 
-  serverSocket = socket(AF_INET, SOCK_STREAM, 0); // Type IPv4 socket using TCP protocol
-
-  // reuse port and address
-  setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
-
   // next bind socket to server address and listen for connections
   if (bind(serverSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
   {
-    printf("Error: The server is not bound to the address.\n");
+    printf("Error binding socket to address.\n");
     return 1;
   }
 
   if (listen(serverSocket, BACKLOG) < 0)
   {
-    printf("Error: The server is not listening.\n");
+    printf("Error listening on socket.\n");
     return 1;
   }
 
-  return 0;
+  return serverSocket;
+}
+
+void handleRequest(int clientSocket)
+{
+  // temp store for the incoming request
+  char buffer[1024];
+
+  // attempt to read the request from client
+  int bytesRead = read(clientSocket, buffer, sizeof(buffer) - 1); // try read sizeof buffer, leave space for null-terminator
+
+  // we want to know how much of bytesRead contains valid data
+  // also want to detect the end-of-file
+  if (bytesRead < 0)
+  {
+    perror("Error reading from client socket");
+    return;
+  }
+
+  // make sure data is null-terminated to make it a valid string
+  buffer[bytesRead] = '\0';
+  printf("Received request: %s\n", buffer);
+
+  // http response 
+  char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\ngreat success 👍👍";
+
+  // send response back to client
+  int bytesWritten = write(clientSocket, response, strlen(response));
+  if (bytesWritten < 0)
+  {
+    perror("Error writing to socket");
+  }
 }
 
 int main()
@@ -61,13 +99,10 @@ int main()
     if (clientSocket < 0)
     {
       perror("Error accepting connection");
-      continue; // go back to start of loop and wait for another connection
+      continue; 
     }
 
-    // handle the request below
-    // {
-
-    // }
+    handleRequest(clientSocket);
 
     close(clientSocket);
   }
